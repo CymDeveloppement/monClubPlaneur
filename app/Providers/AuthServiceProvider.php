@@ -32,6 +32,13 @@ class AuthServiceProvider extends ServiceProvider
                 return false;
             }
         });
+        Gate::define('debug', function ($user) {
+            if ($user->name == 'Challet Yann') {
+               return true;
+            } else {
+                return false;
+            }
+        });
         //
     }
 }

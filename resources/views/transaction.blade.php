@@ -156,7 +156,18 @@
               </div>
               <div class="modal-body">
                 <input type="hidden" id="userAdminAddFlight" value="{{ $selectedUser }}">
-
+                <div class="form-group">
+                  <label for="userPayAdminAddFlight">Utilisateur a facturer</label>
+                  <select class="custom-select" id="userPayAdminAddFlight">
+                      @foreach($users as $user)
+                    <option value="{{ $user->id }}" 
+                        @if($selectedUser == $user->id)
+                        selected
+                        @endif
+                      >{{ $user->name }}</option>
+                      @endforeach
+                  </select>
+                </div>
                 <select class="custom-select" id="adminAddFlightAircraft" onchange="adminAddFlightSelectType();">
                   <option selected value="0">Séléctionnez l'appareil</option>
                   @foreach($aircrafts as $aircraft)

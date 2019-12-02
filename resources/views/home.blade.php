@@ -4,9 +4,13 @@
 <div class="container">
     <div class="row justify-content-center">
         <div class="col-md-8">
-
+          {!! $alertsList !!}
             <div class="card">
-                <div class="card-header">Mon Compte Pilote</div>
+                <div class="card-header">Mon Compte Pilote
+                  @can('debug')
+                  <a class="btn btn-success btn-sm float-right" href="addFlight">Enregistrer un vol</a>
+                  @endcan
+                </div>
 
                 <div class="card-body">
                     @if (session('status'))

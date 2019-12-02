@@ -49,6 +49,26 @@
                       </tbody>
                     </table>
                   </div>
+                  <hr>
+                  <h3>Totaux : </h3>
+                  <div class="table-responsive">
+                    <table class="table table-striped">
+                      <thead>
+                        <tr>
+                          <th scope="col">Type</th>
+                          <th scope="col" style="text-align: center;">Valeur</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        @foreach ($totaux as $key => $total)
+                        <tr>
+                          <td>{{ $key }}</td>
+                          <td style="text-align: center;"><span class="badge badge-info" style="width: 30%;color: white;">{{ $total }}</span></td>
+                        </tr>
+                        @endforeach
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
             </div>
         </div>

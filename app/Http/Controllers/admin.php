@@ -26,6 +26,17 @@ class admin extends Controller
         $this->middleware('auth');
     }
 
+    private function getUserData($id)
+    {
+        $userDataSql = usersData::where('userID', $id)->get();
+        $userData = array();
+        foreach ($userDataSql as $key => $value) {
+            $userData[$value->dataName] = $value->dataValue;
+        }
+
+        return $userData;
+    }
+
     public function addUser(Request $request)
     {
     	$userExist = User::where('email', $request->mail)->get();
@@ -77,20 +88,44 @@ class admin extends Controller
     	$attribute = usersAttributes::all();
     	$allDataUsers = array();
     	$allAttributes = array();
-    	foreach ($attribute as $key => $value) {
+    	
+
+        foreach ($attribute as $key => $value) {
     		$allAttributes[$value->userId][] = $value->attributeName; 
     	}
+        $totaux = array();
+        $totaux['Adhérents (nb)'] = 0;
+        $totaux['Total des soldes (€)'] = 0;
+        $totaux['Total des comptes positifs (€)'] = 0;
+        $totaux['Total des comptes négatifs (€)'] = 0;
+
     	foreach ($users as $key => $value) {
+            $totaux['Adhérents (nb)'] ++;
     		$allDataUsers[$value->id] = $value;
     		$allDataUsers[$value->id]->solde = number_format(($this->getSolde($value->id)/100), 2);
+            $totaux['Total des soldes (€)'] += floatval($allDataUsers[$value->id]->solde);
+            if ($allDataUsers[$value->id]->solde > 0) {
+                $totaux['Total des comptes positifs (€)'] += floatval($allDataUsers[$value->id]->solde);
+            } else {
+                $totaux['Total des comptes négatifs (€)'] += floatval($allDataUsers[$value->id]->solde);
+            }
     		if (isset($allAttributes[$value->id])) {
     			$allDataUsers[$value->id]->userAttributes = $allAttributes[$value->id];
+                foreach ($allDataUsers[$value->id]->userAttributes as $idUser => $attributes) {
+                    if (isset($totaux[$attributes . ' (nb)'])) {
+                        $totaux[$attributes . ' (nb)'] ++;
+                    } else {
+                        $totaux[$attributes . ' (nb)'] = 1;
+                    }
+                }
     		} else {
     			$allDataUsers[$value->id]->userAttributes = array();
     		}
     	}
+
+
     	
-        return view('usersList', ['users' => $allDataUsers]);
+        return view('usersList', ['users' => $allDataUsers, 'totaux' => $totaux]);
     }
 
     public function getValidTransactions()
@@ -179,7 +214,8 @@ class admin extends Controller
     	$flight->airPortStartCode = 'LFCT';
     	$flight->airPortEndCode = 'LFCT';
     	$flight->startType = $request->startType;
-
+        $flight->flightTimestamp = strtotime(str_replace('/', '-', $flight->takeOffTime));
+        $flight->userPayId = $request->userPay;
     	$aircraft = aircraft::find($request->aircraft);
     	echo $request->endMotor;
     	echo $request->startMotor;
@@ -208,25 +244,31 @@ class admin extends Controller
     	$transacTitle = "HDV : ".$aircraft->name;
 
     	$transaction = new transaction();
-    	$transaction->idUser = $flight->idUser;
+    	$transaction->idUser = $flight->userPayId;
     	$transaction->name = $transacTitle;
     	$transaction->value = 0-($flight->value);
     	$transaction->quantity = 1;
     	$transaction->valid = 1;
     	$transaction->solde = 0.0;
-    	$transaction->time = strtotime(str_replace('/', '-', $flight->takeOffTime));
+    	$transaction->time = $flight->flightTimestamp;
     	$transaction->year = date('Y', $transaction->time);
     	$transaction->observation = $transacObservation;
+        $transaction->save();
+        $flight->transactionID = $transaction->id;
+        $flight->save();
 
-    	$flight->save();
-    	$transaction->save();
-
-    	$transactions = transaction::where('idUser', $flight->idUser)->orderBy('time', 'asc')->orderBy('id', 'ASC')->get();
+    	$transactions = transaction::where('idUser', $flight->userPayId)->where('year', '>=', $transaction->year)->orderBy('time', 'asc')->orderBy('id', 'ASC')->get();
     	$solde = 0;
+        $first = 1;
     	foreach ($transactions as $key => $value) {
-    		$transactions[$key]->solde = $solde+$value->value;
-    		$solde = $transactions[$key]->solde;
-    		$transactions[$key]->save();
+            if ($first == 1) {
+                $solde = $value->solde;
+                $first = 0;
+            } else {
+                $transactions[$key]->solde = $solde+$value->value;
+                $solde = $transactions[$key]->solde;
+                $transactions[$key]->save();
+            }
     	}
 
     }
@@ -249,7 +291,7 @@ class admin extends Controller
     			$filterList[] = [$value->id, $value->name];
     		}
     		if (isset($request->filterID)) {
-    			$flightsData = flight::where('aircraftId', $currentFilter)->get();
+    			$flightsData = flight::where('aircraftId', $currentFilter)->orderBy('flightTimestamp')->get();
     		}
     	}
 
@@ -259,10 +301,14 @@ class admin extends Controller
     			$filterList[] = [$value->id, $value->name];
     		}
     		if (isset($request->filterID)) {
-    			$flightsData = flight::where('idUser', $currentFilter)->get();
+    			$flightsData = flight::where('idUser', $currentFilter)->orderBy('flightTimestamp')->get();
     		}
     	}
-
+        $totalTime = 0;
+        $totalPrice = 0;
+        $totalDayTime = 0;
+        $totalLanding = 0;
+        $previousDay = 0;
     	if (isset($flightsData)) {
     		$flight = array();
     		foreach ($flightsData as $key => $value) {
@@ -288,9 +334,67 @@ class admin extends Controller
     			}
     			$flight['price'] = number_format(($value->value/100), 2)." €";
     			$flights[] = $flight;
+                $totalTime += $value->totalTime;
+                $totalLanding += $value->landing;
+                $totalPrice += $value->value;
+                if ($previousDay <> $value->takeOffTime) {
+                    $totalDayTime ++;
+                }
+                $previousDay = $value->takeOffTime;
     		}
     	}
+        $flights[] = ['aircraft' => 'TOTAL', 'pilot' => '', 'startDate' => $totalDayTime.' Jour(s)', 'endDate' => '', 'nbLanding' => $totalLanding, 'flighTime' => $this->convertMinToHM($totalTime), 'startType' => '', 'motorTime' => '', 'price' => number_format(($totalPrice/100), 2)." €"];
     	//var_dump($flights);
     	return view('flights', ['filters' => $filterList, 'currentFilter' => $currentFilter, 'flights' => $flights]);
+    }
+
+    public function updateAndControlData()
+    {
+        echo 'Controle de la base de données<br>';
+        $fault = 0;
+        $flights = flight::where('flightTimestamp', '')->orWhere('flightTimestamp', NULL)->get();
+        foreach ($flights as $key => $value) {
+            echo 'Mise a jour TimeStamp Flight : '.$value->id.'<br>';
+            $value->flightTimestamp = strtotime(str_replace('/', '-', $value->takeOffTime));
+            $value->save();
+            $fault++;
+        }
+
+        $flights = flight::where('userPayId', NULL)->orWhere('userPayId', '')->orWhere('userPayId', 0)->get();
+        foreach ($flights as $key => $value) {
+            echo 'Mise a jour Utilisateur Facturé Flight : '.$value->id.'<br>';
+            $value->userPayId = $value->idUser;
+            $value->save();
+            $fault++;
+        }
+
+
+        $flights = flight::where('transactionID', NULL)->orWhere('transactionID', '')->get();
+        foreach ($flights as $key => $value) {
+            echo 'Mise a jour Transaction associé Flight : '.$value->id.'<br>';
+            $transaction = transaction::where('idUser', $value->userPayId)->where('time', $value->flightTimestamp)->first();
+            if ($transaction->value == (0-$value->value)) {
+                $value->transactionID = $transaction->id;
+                $value->save();
+            }
+            $fault++;
+        }
+
+        $users = User::all();
+
+        foreach ($users as $keyUsers => $user) {
+            $transactions = transaction::where('idUser', $user->id)->orderBy('time', 'asc')->orderBy('id', 'ASC')->get();
+            $solde = 0;
+            foreach ($transactions as $key => $value) {
+                $transactions[$key]->solde = $solde+$value->value;
+                $solde = $transactions[$key]->solde;
+                $transactions[$key]->save();
+            }
+            echo 'Solde compte :'.$user->name.' = '.($solde/100).'<br>';
+        }
+
+        
+
+        echo '<br>Controle de la base de données terminée '.$fault.' défauts corrigés.';
     }
 }

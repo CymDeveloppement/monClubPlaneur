@@ -4,9 +4,11 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use App\library\alerts;
 use App\transaction;
 use App\transactionType;
 use App\User;
+use App\usersData;
 use App\aircraft;
 use App\sailplaneStartPrice;
 use App\flight;
@@ -25,6 +27,18 @@ class HomeController extends Controller
         $this->middleware('auth');
     }
 
+
+    private function getUserData()
+    {
+        $userDataSql = usersData::where('userID', Auth::user()->id)->get();
+        $userData = array();
+        foreach ($userDataSql as $key => $value) {
+            $userData[$value->dataName] = $value->dataValue;
+        }
+
+        return $userData;
+    }
+
     /**
      * Show the application dashboard.
      *
@@ -32,6 +46,9 @@ class HomeController extends Controller
      */
     public function index()
     {
+
+        $userData = $this->getUserData();
+        $alerts = alerts::getAlertsList(Auth::user()->id);
         $transactions = array();
         $transactionsData = transaction::where('idUser',  Auth::user()->id)
                                         ->orderBy('time', 'asc')
@@ -42,8 +59,8 @@ class HomeController extends Controller
         }
 
         $attributes = usersAttributes::where('userId', Auth::user()->id)->get();
-        //var_dump($transaction);
-        return view('home', ['userAttributes' => $attributes, 'transactions' => $transactions, 'solde' => number_format(($this->getSolde(Auth::user()->id)/100), 2)]);
+        
+        return view('home', ['userAttributes' => $attributes, 'transactions' => $transactions, 'solde' => number_format(($this->getSolde(Auth::user()->id)/100), 2), 'userData' => $userData, 'alertsList' => $alerts]);
     }
 
     /**
@@ -55,7 +72,7 @@ class HomeController extends Controller
     {
 
         $selectedUser = 0;
-        $users = User::all();
+        $users = User::where('name', '<>', '')->orderBy('name', 'asc')->get();
         $transactions = array();
         if (isset($request->selectUserInTransaction)) {
 
@@ -259,7 +276,9 @@ class HomeController extends Controller
             $startInput = $request->start;
             $endInput = $request->end;
         }
-        $flightsData = flight::where('flightTimestamp', '>=', $start)->where('flightTimestamp', '<=', $end)->orderBy('flightTimestamp', 'ASC')->get();
+        $flightsData = flight::where('flightTimestamp', '>=', $start)->where('flightTimestamp', '<=', $end)->where('transactionID', '>', 0)->orderBy('flightTimestamp', 'ASC')->get();
+        $totalFlightTime = 0;
+        $totalLanding = 0;
         foreach ($flightsData as $key => $value) {
             $flightArray = array();
             $flightArray['aircraft'] = aircraft::find($value->aircraftId)->name;
@@ -267,7 +286,9 @@ class HomeController extends Controller
             $flightArray['startDate'] = $value->takeOffTime;
             $flightArray['endDate'] = $value->landingTime;
             $flightArray['nbLanding'] = $value->landing;
+            $totalLanding += $value->landing;
             $flightArray['flighTime'] = $this->convertMinToHM($value->totalTime);
+            $totalFlightTime += $value->totalTime;
             if (aircraft::find($value->aircraftId)->type == 2) {
                 $flightArray['startType'] = sailplaneStartPrice::find($value->startType)->name;
             } else {
@@ -277,6 +298,15 @@ class HomeController extends Controller
 
             $flights[] = $flightArray;
         }
+        $flightArray = array();
+        $flightArray['aircraft'] = '';
+        $flightArray['pilot'] = '';
+        $flightArray['startDate'] = '';
+        $flightArray['endDate'] = 'Totaux : ';
+        $flightArray['nbLanding'] = $totalLanding;
+        $flightArray['flighTime'] = $this->convertMinToHM($totalFlightTime);
+        $flightArray['startType'] = '';
+        $flights[] = $flightArray;
         return view('planches', ['flights' => $flights, 'dates' => [$startInput, $endInput]]);
     }
 
@@ -295,13 +325,18 @@ class HomeController extends Controller
             $startInput = $request->start;
             $endInput = $request->end;
         }
-        $flightsData = flight::where('idUser', Auth::user()->id)->where('flightTimestamp', '>=', $start)->where('flightTimestamp', '<=', $end)->orderBy('flightTimestamp', 'ASC')->get();
+        
+        $flightsData = flight::where('idUser', Auth::user()->id)->whereBetween('flightTimestamp', [$start, $end])->where('transactionID', '>', 0)->orderBy('flightTimestamp', 'ASC')->get();
+        $totalFlightTime = 0;
+        $totalLanding = 0;
         foreach ($flightsData as $key => $value) {
             $flightArray = array();
             $flightArray['aircraft'] = aircraft::find($value->aircraftId)->name;
             $flightArray['startDate'] = $value->takeOffTime;
             $flightArray['endDate'] = $value->landingTime;
             $flightArray['nbLanding'] = $value->landing;
+            $totalLanding += $value->landing;
+            $totalFlightTime += $value->totalTime;
             $flightArray['flighTime'] = $this->convertMinToHM($value->totalTime);
             if (aircraft::find($value->aircraftId)->type == 2) {
                 $flightArray['startType'] = sailplaneStartPrice::find($value->startType)->name;
@@ -312,6 +347,68 @@ class HomeController extends Controller
 
             $flights[] = $flightArray;
         }
-        return view('carnetVol', ['flights' => $flights, 'dates' => [$startInput, $endInput]]);
+
+        $flightArray = array();
+        $flightArray['aircraft'] = '';
+        $flightArray['pilot'] = '';
+        $flightArray['startDate'] = '';
+        $flightArray['endDate'] = 'Totaux : ';
+        $flightArray['nbLanding'] = $totalLanding;
+        $flightArray['flighTime'] = $this->convertMinToHM($totalFlightTime);
+        $flightArray['startType'] = '';
+        $flights[] = $flightArray;
+
+        $externalFlightsData = flight::where('idUser', Auth::user()->id)->whereBetween('flightTimestamp', [$start, $end])->where('transactionID', '=', 0)->orderBy('flightTimestamp', 'ASC')->get();
+        $externalFlights = array();
+        $totalFlightTime = 0;
+        $totalLanding = 0;
+        foreach ($externalFlightsData as $key => $value) {
+            $externalFlightArray = array();
+            
+            $externalFlightArray['aircraft'] = aircraft::find($value->aircraftId)->name;
+            
+            $externalFlightArray['startDate'] = $value->takeOffTime;
+            $externalFlightArray['nbLanding'] = $value->landing;
+            $externalFlightArray['flighTime'] = $this->convertMinToHM($value->totalTime);
+            $totalLanding += $value->landing;
+            $totalFlightTime += $value->totalTime;
+            if (aircraft::find($value->aircraftId)->type == 2) {
+                $externalFlightArray['startType'] = sailplaneStartPrice::find($value->startType)->name;
+            } else {
+                $externalFlightArray['startType'] = 'Autonome';
+            }
+
+            $externalFlightArray['aircraftType'] = '';
+            
+
+            $externalFlights[] = $externalFlightArray;
+        }
+
+        $flightArray = array();
+        $flightArray['aircraft'] = '';
+        $flightArray['pilot'] = '';
+        $flightArray['startDate'] = '';
+        $flightArray['endDate'] = 'Totaux : ';
+        $flightArray['nbLanding'] = $totalLanding;
+        $flightArray['flighTime'] = $this->convertMinToHM($totalFlightTime);
+        $flightArray['aircraftType'] = '';
+        $flightArray['startType'] = '';
+
+        if ($totalLanding > 0) {
+            $externalFlights[] = $flightArray;
+        }
+        
+
+        return view('carnetVol', ['flights' => $flights, 'externalFlights' => $externalFlights, 'dates' => [$startInput, $endInput]]);
+    }
+
+    public function addFlight(Request $request)
+    {
+        return view('addFlight');
+    }
+
+    public function alertRead(Request $request)
+    {
+        alerts::markAsRead(Auth::user()->id, $request->id);
     }
 }

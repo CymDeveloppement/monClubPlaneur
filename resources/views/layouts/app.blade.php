@@ -31,6 +31,9 @@
         background-repeat: no-repeat;
         background-attachment: fixed;
       }
+      .stepAddFlight{
+        height: 800px;
+      }
     </style>
 </head>
 <body>
@@ -53,7 +56,9 @@
                     <!-- Right Side Of Navbar -->
                     <ul class="navbar-nav ml-auto">
                         <!-- Authentication Links -->
+
                         @guest
+                            <!--
                             <li class="nav-item">
                                 <a class="nav-link" href="{{ route('login') }}">{{ __('Login') }}</a>
                             </li>
@@ -62,6 +67,7 @@
                                     <a class="nav-link" href="{{ route('register') }}">{{ __('Register') }}</a>
                                 </li>
                             @endif
+                          -->
                         @else
                             <li class="nav-item dropdown">
 
@@ -110,6 +116,10 @@
                                     </a>
                                     <a class="dropdown-item" href="vol">
                                         Carnet de vol Pilote
+                                    </a>
+
+                                    <a class="dropdown-item" href="#" data-toggle="modal" data-target="#controlData" data-backdrop="static" onclick="controlBDDData();">
+                                        Controle des données
                                     </a>
                                     
                                     @endcan
@@ -194,6 +204,30 @@
             </div>
           </div>
         </div>
+
+      <!-- Modal Control Data -->
+      <div class="modal fade" id="controlData" tabindex="-1" role="dialog" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered" role="document">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title" >Controle & mise à jour de la base de données </h5>
+            </div>
+            <div class="modal-body">
+              <div id="controlDataResult">
+                <div class="text-center">
+                  <h5>Controle de la base de données en cours ...</h5>
+                  <div class="spinner-border" role="status">
+                    <span class="sr-only">Loading...</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" data-dismiss="modal" id="closeControlDataModal" onclick="window.location = window.location.href.split('#')[0];" disabled>Fermer</button>
+            </div>
+          </div>
+        </div>
+      </div>
     @endcan
 
     <!-- Modal add payments-->

@@ -373,7 +373,7 @@ function validNewAdminFlight(close)
 	var landingDate = $('#adminAddFlightsLanding').val();
 	var flightTime = $('#adminAddFlightsTime2').val();
 	var nbTakeOff = $('#adminAddFlightsTakeOff2').val();
-
+	var userPay = $('#userPayAdminAddFlight').val();
 	$.ajaxSetup({
 	    headers: {
 	        'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
@@ -395,7 +395,7 @@ function validNewAdminFlight(close)
 
 	
 
-	$.post( "validNewAdminFlight", {user: user, aircraft: aircraft, aircraftType: aircraftType, takeOffDate: takeOffDate, landingDate: landingDate,
+	$.post( "validNewAdminFlight", {user: user, userPay: userPay, aircraft: aircraft, aircraftType: aircraftType, takeOffDate: takeOffDate, landingDate: landingDate,
 									flightTime: flightTime, nbTakeOff: nbTakeOff, startType: startType, startMotor: startMotor, endMotor: endMotor})
 	  .done(function( data ) {
 	  	console.log(data);
@@ -413,5 +413,29 @@ function selectFilterFlightBoard()
 	var newuri = window.location.href.split("#")[0].split("?")[0];
 	newuri = newuri + "?filterID="+filter;
 	window.location = newuri;
+}
+
+function controlBDDData()
+{
+	$.get( "controlData")
+	  .done(function( data ) {
+	  	console.log(data);
+	  	$('#controlDataResult').html(data);
+	  	$('#closeControlDataModal').removeAttr('disabled');
+	});
+}
+
+function markReadAlert(id)
+{
+	$.ajaxSetup({
+	    headers: {
+	        'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
+	    }
+	});
+
+	$.post( "alertRead", { id: id})
+	  .done(function( data ) {
+	  	console.log(data);
+	});
 }
 
